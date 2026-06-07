@@ -30,7 +30,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 USER_AGENT = (
     "BIST-Chatbot-Project/1.0 "
     "(Student class project for BIST university; "
-    "contact: ahnsunggwan1223@bist.ac.kr)"
+    "contact: contact@example.com)"
 )
 MAX_ITEMS = 15  # 핀고정 공지가 위에 섞이므로 넉넉히 가져와서 app.py에서 날짜순 정렬
 REQUEST_DELAY_SEC = 2
