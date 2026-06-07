@@ -23,6 +23,8 @@ FAQ_BOARD_URL = (
 LIST_CARD_MAX_ITEMS = 5  # 카카오 listCard 한 카드당 최대 5개
 KST = timezone(timedelta(hours=9))  # 한국 표준시 (Render 서버는 UTC라 명시 필요)
 NEW_BADGE_DAYS = 7  # 공지 'NEW' 표시 기준 (최근 N일)
+SCHOOL_PHONE = "051-334-6666"  # 학교 대표전화
+SCHOOL_MAP_URL = "https://map.kakao.com/?q=부산과학기술대학교"  # 오시는길(카카오맵 검색)
 
 
 def load_json(filename: str) -> dict:
@@ -64,6 +66,10 @@ def list_card(header_title: str, items: list, buttons=None) -> dict:
 
 def web_link_button(label: str, url: str) -> dict:
     return {"label": label, "action": "webLink", "webLinkUrl": url}
+
+
+def phone_button(label: str, number: str) -> dict:
+    return {"label": label, "action": "phone", "phoneNumber": number}
 
 
 def latest_board_items(items: list[dict], top_n: int = LIST_CARD_MAX_ITEMS) -> list[dict]:
@@ -205,14 +211,19 @@ def facility():
         {
             "title": "도서관 운영시간",
             "description": f"{hours['weekday_thu']}\n{hours['friday']}\n{hours['weekend']}",
+            "link": {"web": lib["homepage"]},  # 항목을 누르면 도서관 홈페이지로
         },
     ]
     for loc in lib["locations"]:
         items.append({"title": loc["name"], "description": loc["place"]})
+    items.append({"title": "학교 대표전화", "description": SCHOOL_PHONE})
     return jsonify(kakao_response(
         outputs=[list_card(
-            "학사시설 안내", items,
-            buttons=[web_link_button("도서관 홈페이지", lib["homepage"])],
+            "학사시설·오시는길 안내", items,
+            buttons=[
+                web_link_button("오시는길(지도)", SCHOOL_MAP_URL),
+                phone_button("학교 전화 걸기", SCHOOL_PHONE),
+            ],
         )],
         quick_replies=menu_quick_replies(),
     ))
