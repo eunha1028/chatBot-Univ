@@ -56,18 +56,18 @@ def latest_board_items(items: list[dict], top_n: int = LIST_CARD_MAX_ITEMS) -> l
 
 
 def menu_quick_replies():
-    labels = ["학사일정", "공지사항", "학식메뉴", "장학금", "학사시설", "FAQ"]
+    labels = ["학사일정", "공지사항", "장학금", "학사시설", "FAQ"]
     return [{"label": l, "action": "message", "messageText": l} for l in labels]
 
 
 def menu_list_items():
-    # 카카오 listCard는 최대 5개 항목만 지원 → FAQ는 quickReplies 버튼으로만 노출
+    # 메뉴 5개를 카카오 listCard 최대 항목 수(5개)에 맞춰 모두 노출
     return [
         {"title": "학사일정", "description": "수업·시험 등 주요 일정"},
         {"title": "공지사항", "description": "학교 최신 공지"},
-        {"title": "학식메뉴", "description": "오늘의 학식"},
         {"title": "장학금", "description": "최신 장학금 공지"},
         {"title": "학사시설", "description": "도서관 등 시설 안내"},
+        {"title": "FAQ", "description": "자주 묻는 질문"},
     ]
 
 
@@ -130,20 +130,6 @@ def notice():
             "최신 공지사항", items,
             buttons=[web_link_button("공지사항 전체보기", NOTICE_BOARD_URL)],
         )],
-        quick_replies=menu_quick_replies(),
-    ))
-
-
-@app.route("/skill/meal", methods=["POST"])
-def meal():
-    data = load_json("meals.json")
-    today = data["today"]
-    items = [
-        {"title": "중식", "description": today["lunch"]},
-        {"title": "석식", "description": today["dinner"]},
-    ]
-    return jsonify(kakao_response(
-        outputs=[list_card("오늘의 학식", items)],
         quick_replies=menu_quick_replies(),
     ))
 
