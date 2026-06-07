@@ -16,6 +16,7 @@ import io
 import json
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -27,6 +28,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
 
 BASE_URL = "https://www.bist.ac.kr/univ/board/"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+KST = timezone(timedelta(hours=9))  # 한국 표준시 (수집일 기록용)
 USER_AGENT = (
     "BIST-Chatbot-Project/1.0 "
     "(Student class project for BIST university; "
@@ -86,8 +88,12 @@ def parse_board(html: str, max_items: int = MAX_ITEMS) -> list[dict]:
 def save_items(items: list[dict], filename: str) -> Path:
     path = DATA_DIR / filename
     path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "updated": datetime.now(KST).date().isoformat(),  # 수집일 (신선도 표시용)
+        "items": items,
+    }
     with path.open("w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
     return path
 
 

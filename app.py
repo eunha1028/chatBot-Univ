@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify
@@ -21,11 +21,27 @@ FAQ_BOARD_URL = (
     "?menu=279&board_id=haksahangjung"
 )
 LIST_CARD_MAX_ITEMS = 5  # 카카오 listCard 한 카드당 최대 5개
+KST = timezone(timedelta(hours=9))  # 한국 표준시 (Render 서버는 UTC라 명시 필요)
+NEW_BADGE_DAYS = 7  # 공지 'NEW' 표시 기준 (최근 N일)
 
 
 def load_json(filename: str) -> dict:
     with (DATA_DIR / filename).open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def today_kst() -> date:
+    """한국 시간(KST) 기준 오늘 날짜. Render 서버가 UTC여도 일관되게 동작."""
+    return datetime.now(KST).date()
+
+
+def fresh_label(updated) -> str:
+    """수집일을 헤더용 ' (M.D. 기준)' 문구로. 값이 없거나 형식이 어긋나면 빈 문자열."""
+    try:
+        d = date.fromisoformat(updated)
+        return f" ({d.month}.{d.day}. 기준)"
+    except (ValueError, TypeError):
+        return ""
 
 
 def kakao_response(outputs, quick_replies=None) -> dict:
@@ -71,6 +87,18 @@ def menu_list_items():
     ]
 
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    # 데이터 파일 누락·손상 등 예기치 못한 오류 시 500 대신 친절한 안내로 폴백
+    return jsonify(kakao_response(
+        outputs=[simple_text(
+            "앗, 비스가 잠시 정보를 불러오지 못했어요 :(\n"
+            "잠시 후 다시 시도해 주세요."
+        )],
+        quick_replies=menu_quick_replies(),
+    ))
+
+
 @app.route("/")
 def index():
     return "BIST Chatbot 'Bis' is running."
@@ -98,16 +126,26 @@ def menu():
 @app.route("/skill/schedule", methods=["POST"])
 def schedule():
     data = load_json("schedule.json")
-    today = date.today().isoformat()
+    today = today_kst()
+    today_str = today.isoformat()
     upcoming = [
         item for item in data["items"]
-        if (item.get("end_date") or item["date"]) >= today
+        if (item.get("end_date") or item["date"]) >= today_str
     ]
     upcoming.sort(key=lambda x: x["date"])
-    items = [
-        {"title": item["label"], "description": item["event"]}
-        for item in upcoming[:5]
-    ]
+    items = []
+    for item in upcoming[:5]:
+        d = (date.fromisoformat(item["date"]) - today).days
+        if d > 0:
+            badge = f"D-{d}"        # 시작 전
+        elif d == 0:
+            badge = "D-DAY"         # 오늘 시작
+        else:
+            badge = "진행중"        # 시작일은 지났지만 기간 내(end_date 기준)
+        items.append({
+            "title": f"[{badge}] {item['label']}",
+            "description": item["event"],
+        })
     if not items:
         items = [{"title": "예정된 일정 없음", "description": "다음 학기 일정을 준비 중입니다."}]
     return jsonify(kakao_response(
@@ -119,15 +157,22 @@ def schedule():
 @app.route("/skill/notice", methods=["POST"])
 def notice():
     data = load_json("notices.json")
+    today = today_kst()
     items = []
     for item in latest_board_items(data["items"]):
-        list_item = {"title": item["title"], "description": item["date"]}
+        title = item["title"]
+        try:  # 최근 게시물에 NEW 배지 (날짜 형식이 어긋나면 배지 없이 표시)
+            if (today - date.fromisoformat(item["date"])).days <= NEW_BADGE_DAYS:
+                title = f"[NEW] {title}"
+        except ValueError:
+            pass
+        list_item = {"title": title, "description": item["date"]}
         if item.get("url"):
             list_item["link"] = {"web": item["url"]}
         items.append(list_item)
     return jsonify(kakao_response(
         outputs=[list_card(
-            "최신 공지사항", items,
+            "최신 공지사항" + fresh_label(data.get("updated")), items,
             buttons=[web_link_button("공지사항 전체보기", NOTICE_BOARD_URL)],
         )],
         quick_replies=menu_quick_replies(),
@@ -145,7 +190,7 @@ def scholarship():
         items.append(item)
     return jsonify(kakao_response(
         outputs=[list_card(
-            "최근 장학금 공지", items,
+            "최근 장학금 공지" + fresh_label(data.get("updated")), items,
             buttons=[web_link_button("장학금 공지 전체보기", SCHOLARSHIP_BOARD_URL)],
         )],
         quick_replies=menu_quick_replies(),
@@ -178,8 +223,23 @@ def fallback():
     return jsonify(kakao_response(
         outputs=[
             simple_text(
-                "죄송해요, 비스가 아직 모르는 질문이에요.\n"
-                "아래 메뉴 중에서 골라주시면 도와드릴게요!"
+                "음, 비스가 아직 그 질문은 잘 모르겠어요 :(\n"
+                "혹시 아래 중에 궁금한 게 있으실까요? 골라주시면 바로 안내해 드릴게요!"
+            ),
+            list_card("이런 걸 도와드릴 수 있어요", menu_list_items()),
+        ],
+        quick_replies=menu_quick_replies(),
+    ))
+
+
+@app.route("/skill/help", methods=["POST"])
+def help_skill():
+    return jsonify(kakao_response(
+        outputs=[
+            simple_text(
+                "저는 부산과학기술대학교 안내봇 비스예요 :)\n"
+                "학사일정·공지사항·장학금·학사시설·FAQ를 안내해 드려요.\n"
+                "아래에서 궁금한 걸 골라보세요!"
             ),
             list_card("비스가 도와드릴 수 있어요", menu_list_items()),
         ],
