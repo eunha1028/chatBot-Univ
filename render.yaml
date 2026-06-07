@@ -1,0 +1,12 @@
+# Render 배포 설정(Blueprint).
+# Render가 GitHub 저장소에서 이 파일을 읽어 웹 서비스를 자동 구성한다.
+# - buildCommand: 의존성 설치
+# - startCommand: gunicorn으로 Flask 앱(app.py의 app 객체) 실행
+#   Render가 주입하는 $PORT 포트에 바인딩해야 외부에서 접속된다.
+services:
+  - type: web
+    name: bist-chatbot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
